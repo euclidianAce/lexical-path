@@ -75,7 +75,7 @@ local lexical_path <const> = {
 }
 
 local function parse_components(source: string, component_pattern: string): {string}
-	local new: {string} = {}
+	local new <const>: {string} = {}
 	for chunk in source:gmatch(component_pattern) do
 		if chunk == ".." then
 			if #new > 0 and new[#new] ~= ".." then
@@ -281,7 +281,7 @@ function Path:relative_to(other: Path): Path, RelativeToError
 	if b_len > a_len then
 		mismatch = true
 	end
-	local ret: Path = { root = root }
+	local ret <total>: Path = { root = root, is_absolute = false }
 	if mismatch then
 		for _ = 1, b_len - idx do
 			table.insert(ret, "..")
@@ -305,7 +305,7 @@ end
 --- Returns the components of the pattern (normalized) as patterns for
 --- string.match, and whether the matching path should be absolute
 local function parse_pattern(source: string): {string}, boolean
-	local components: {string} = {}
+	local components <const>: {string} = {}
 	for chunk in source:gmatch "[^/]+" do
 		if chunk == ".." then
 			if #components > 0 and components[#components] ~= ".." then
