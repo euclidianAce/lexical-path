@@ -96,21 +96,10 @@ function lexical_path.from_components(components: {string}, root?: string, is_ab
 	return setmetatable(result, path_metatable)
 end
 
---- Parse a string as a Windows path
+--- What `from_windows` uses to determine the root
 ---
---- Component Separator: "\\" or "/"
---- Possible Roots:
----   - nil
----   - A drive letter followed by a colon (Note: Drive letters will be normalized to upper case)
----   - "", representing the current drive
----   - \, representing a UNC path, always absolute
----   - \\?, representing an absolute DOS device path (without normalization), always absolute
----   - \\., representing an absolute DOS device path, always absolute
----
---- See
---- https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
---- for more information on windows file path formats
-function lexical_path.from_windows(source: string): Path
+--- Returns the root, whether the path is absolute, and the rest of the path
+function lexical_path.chop_windows_root(source: string): string, boolean, string
 	local root: string
 	local is_absolute = false
 	if source:sub(1, 3):match("^[A-Za-z]:\\") then
@@ -132,7 +121,26 @@ function lexical_path.from_windows(source: string): Path
 		source = source:sub(2, -1)
 		is_absolute = true
 	end
-	return lexical_path.from_components(parse_components(source, "[^/\\]+"), root, is_absolute)
+	return root, is_absolute, source
+end
+
+--- Parse a string as a Windows path
+---
+--- Component Separator: "\\" or "/"
+--- Possible Roots:
+---   - nil
+---   - A drive letter followed by a colon (Note: Drive letters will be normalized to upper case)
+---   - "", representing the current drive
+---   - \, representing a UNC path, always absolute
+---   - \\?, representing an absolute DOS device path (without normalization), always absolute
+---   - \\., representing an absolute DOS device path, always absolute
+---
+--- See
+--- https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
+--- for more information on windows file path formats
+function lexical_path.from_windows(source: string): Path
+	local root <const>, is_absolute <const>, rest <const> = lexical_path.chop_windows_root(source)
+	return lexical_path.from_components(parse_components(rest, "[^/\\]+"), root, is_absolute)
 end
 
 --- Parse a string as a Unix path
