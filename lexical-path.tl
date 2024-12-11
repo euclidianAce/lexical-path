@@ -293,4 +293,96 @@ function Path:relative_to(other: Path): Path, RelativeToError
 	return setmetatable(ret, path_metatable)
 end
 
+--- Shell style glob patterns
+---
+--- For patterns:
+---    - `/` is always the path separator
+---    - a pattern starting with `/` is an absolute path
+---    - `*` represents any number of non-path-separator characters (i.e. matches within a component)
+---    - `**` on its own represents any number of path components
+---    - Same assumptions about paths as stated at the top of this module
+---
+--- Returns the components of the pattern (normalized) as patterns for
+--- string.match, and whether the matching path should be absolute
+local function parse_pattern(source: string): {string}, boolean
+	local components: {string} = {}
+	for chunk in source:gmatch "[^/]+" do
+		if chunk == ".." then
+			if #components > 0 and components[#components] ~= ".." then
+				table.remove(components)
+			else
+				table.insert(components, chunk)
+			end
+		elseif chunk == "**" then
+			if components[#components] ~= "**" then
+				table.insert(components, "**")
+			end
+		elseif chunk ~= "." then
+			local escaped <const> = chunk:gsub(
+				"[%^%$%(%)%%%.%[%]%*%+%-%?]",
+				function(c: string): string
+					if c == "*" then
+						return ".*"
+					end
+					return "%" .. c
+				end
+			)
+
+			table.insert(components, escaped)
+		end
+	end
+	return components, source:sub(1, 1) == "/"
+end
+
+local function match(path_components: {string}, pattern_components: {string}): boolean
+	local path_length <const> = #path_components
+	local pattern_length <const> = #pattern_components
+
+	local pattern_index = 1
+	local path_index = 1
+
+	local double_glob_stack <const> = {}
+	local function push_state()
+		table.insert(double_glob_stack, { pattern_index, path_index })
+	end
+	local function pop_state(): boolean
+		local t <const> = table.remove(double_glob_stack)
+		if not t then return false end
+		pattern_index = t[1]
+		path_index = t[2] + 1
+		return true
+	end
+
+	local function completed_match(): boolean
+		return pattern_index > pattern_length and path_index > path_length
+	end
+
+	repeat
+		while pattern_index <= pattern_length and path_index <= path_length do
+			local pattern_component <const> = pattern_components[pattern_index]
+			local path_component <const> = path_components[path_index]
+
+			if pattern_component == "**" then
+				push_state()
+				pattern_index = pattern_index + 1
+			elseif path_component:match(pattern_component) then
+				pattern_index = pattern_index + 1
+				path_index = path_index + 1
+			elseif not pop_state() then
+				return false
+			end
+		end
+	until completed_match() or not pop_state()
+
+	return completed_match()
+end
+
+function Path:match(pattern_src: string): boolean
+	local pattern <const>, absolute <const> = parse_pattern(pattern_src)
+	if self.is_absolute ~= absolute then
+		return false
+	end
+	return match(self, pattern)
+end
+
 return lexical_path
