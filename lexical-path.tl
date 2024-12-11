@@ -195,10 +195,10 @@ end
 
 path_metatable.__eq = function(a: Path, b: Path): boolean
 	if rawequal(a, b) then return true end
-	if a == nil then return false end
-	if b == nil then return false end
-	if getmetatable(a) ~= path_metatable then return false end
-	if getmetatable(b) ~= path_metatable then return false end
+	if rawequal(a, nil) then return false end
+	if rawequal(b, nil) then return false end
+	if not rawequal(getmetatable(a), path_metatable) then return false end
+	if not rawequal(getmetatable(b), path_metatable) then return false end
 
 	if a.root ~= b.root or a.is_absolute ~= b.is_absolute or #a ~= #b then
 		return false
