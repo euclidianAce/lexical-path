@@ -26,11 +26,26 @@ local cases: {{string, lexical_path.Path}} = {
 	{ [[\\.\UNC\LOCALHOST\c$\temp\test-file.txt]],                          lexical_path.from_components({ "UNC", "LOCALHOST", "c$", "temp", "test-file.txt" },                  [[\\.]],        true) },
 }
 
+local case_output <const> = [[Case %d:
+Input   : %q
+Parsed  : %q (%s)
+Expected: %q (%s)
+]]
+
+local inspect = require "inspect" as function(any)
+
 for i, case in ipairs(cases) do
 	local parsed = lexical_path.from_windows(case[1])
 	local expected = case[2]
 	if parsed ~= expected then
-		print(("Case %d:\n   Input   : %q\n   Parsed  : %q (%s)\n   Expected: %q (%s)"):format(i, case[1], parsed:to_string "\\", require"inspect"(parsed, nil), expected:to_string "\\", require"inspect"(expected, nil)))
+		print(case_output:format(
+			i,
+			case[1],
+			parsed:to_string "\\",
+			inspect(parsed),
+			expected:to_string "\\",
+			inspect(expected)
+		))
 	end
 end
 
