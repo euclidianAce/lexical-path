@@ -162,7 +162,9 @@ end
 
 function Path:to_string(separator?: string): string
 	separator = separator or package.config:sub(1, 1)
-	return (self.root or "") .. (self.is_absolute and separator or "") .. table.concat(self, separator)
+	return (self.root or "")
+		.. (self.is_absolute and separator or "")
+		.. (#self == 0 and "." or table.concat(self, separator))
 end
 
 path_metatable.__tostring = Path.to_string
