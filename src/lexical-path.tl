@@ -77,25 +77,38 @@ local lexical_path <const> = {
 	RelativeToError = RelativeToError,
 }
 
-local function parse_components(source: string, component_pattern: string): {string}
-	local new <const>: {string} = {}
-	for chunk in source:gmatch(component_pattern) do
-		if chunk == ".." then
-			if #new > 0 and new[#new] ~= ".." then
-				table.remove(new)
+local function component_builder(target?: {string}): {string}, function(string)
+	local components <const> = target or {}
+	return components, function(component: string)
+		if component == ".." then
+			if #components > 0 and components[#components] ~= ".." then
+				table.remove(components)
 			else
-				table.insert(new, chunk)
+				table.insert(components, component)
 			end
-		elseif chunk ~= "." then
-			table.insert(new, chunk)
+		elseif component ~= "." and component ~= "" then
+			table.insert(components, component)
 		end
+	end
+end
+
+local function parse_components(source: string, component_pattern: string): {string}
+	local new <const>, add <const> = component_builder()
+	for chunk in source:gmatch(component_pattern) do
+		add(chunk)
 	end
 	return new
 end
 
+--- Bring your own parser
+---
+--- The given components array will be copied and normalized
 function lexical_path.from_components(components: {string}, root?: string, is_absolute?: boolean): Path
 	local result <total>: Path = { root = root, is_absolute = is_absolute }
-	for i, v in ipairs(components) do result[i] = v end
+	local _, add <const> = component_builder(result)
+	for _, v in ipairs(components) do
+		add(v)
+	end
 	return setmetatable(result, path_metatable)
 end
 
@@ -183,16 +196,9 @@ end
 ---    "foo/./bar/../baz" would be normalized to "foo/baz"
 function Path:normalized(): Path
 	local new <total>: Path = { root = self.root, is_absolute = self.is_absolute }
+	local _, add <const> = component_builder(new)
 	for _, chunk in ipairs(self) do
-		if chunk == ".." then
-			if #new > 0 and new[#new] ~= ".." then
-				table.remove(new)
-			else
-				table.insert(new, chunk)
-			end
-		elseif chunk ~= "." and #chunk > 0 then
-			table.insert(new, chunk)
-		end
+		add(chunk)
 	end
 	return setmetatable(new, path_metatable)
 end
