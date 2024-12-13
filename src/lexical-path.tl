@@ -130,7 +130,6 @@ end
 --- Possible Roots:
 ---   - nil
 ---   - A drive letter followed by a colon (Note: Drive letters will be normalized to upper case)
----   - "", representing the current drive
 ---   - \, representing a UNC path, always absolute
 ---   - \\?, representing an absolute DOS device path (without normalization), always absolute
 ---   - \\., representing an absolute DOS device path, always absolute
