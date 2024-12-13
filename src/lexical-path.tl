@@ -18,6 +18,9 @@
 ---
 ---  - Empty components are not allowed/repeated separators are redundant
 ---    e.g. "foo//bar" == "foo/bar"
+---
+---
+--- This library is released under CC0 1.0
 
 
 --- A path consists of a list of "components" and an optional "root"
