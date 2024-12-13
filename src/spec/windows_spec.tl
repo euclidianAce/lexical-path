@@ -1,6 +1,6 @@
 local lexical_path <const> = require "lexical-path"
 
-local cases: {{string, lexical_path.Path}} = {
+local cases <const>: {{string, lexical_path.Path}} = {
 	{ [[C:\Documents\Newsletters\Summer2018.pdf]],                          lexical_path.from_components({ "Documents", "Newsletters", "Summer2018.pdf" },                       [[C:]],         true) },
 	{ [[\Program Files\Custom Utilities\StringFinder.exe]],                 lexical_path.from_components({ "Program Files", "Custom Utilities", "StringFinder.exe" },            nil,            true) },
 	{ [[2018\January.xlsx]],                                                lexical_path.from_components({ "2018", "January.xlsx" },                                             nil,            false) },
@@ -26,27 +26,30 @@ local cases: {{string, lexical_path.Path}} = {
 	{ [[\\.\UNC\LOCALHOST\c$\temp\test-file.txt]],                          lexical_path.from_components({ "UNC", "LOCALHOST", "c$", "temp", "test-file.txt" },                  [[\\.]],        true) },
 }
 
-local case_output <const> = [[Case %d:
+local case_output <const> = [[
+
 Input   : %q
 Parsed  : %q (%s)
 Expected: %q (%s)
 ]]
 
-local inspect = require "inspect" as function(any)
+local inspect <const> = require "inspect" as function(any)
 
-for i, case in ipairs(cases) do
-	local parsed = lexical_path.from_windows(case[1])
-	local expected = case[2]
-	if parsed ~= expected then
-		print(case_output:format(
-			i,
-			case[1],
-			parsed:to_string "\\",
-			inspect(parsed),
-			expected:to_string "\\",
-			inspect(expected)
-		))
+global describe: function(string, function)
+global it: function(string, function)
+
+describe("Windows paths", function()
+	for _, case in ipairs(cases) do
+		it("should handle “" .. case[1] .. "”", function()
+			local parsed <const> = lexical_path.from_windows(case[1])
+			local expected <const> = case[2]
+			assert(parsed == expected, case_output:format(
+				case[1],
+				parsed:to_string "\\",
+				inspect(parsed),
+				expected:to_string "\\",
+				inspect(expected)
+			))
+		end)
 	end
-end
-
-print("Done")
+end)
