@@ -303,6 +303,46 @@ function Path:relative_to(other: Path): Path, RelativeToError
 	return setmetatable(ret, path_metatable)
 end
 
+local function path_iterator(p: Path, max: integer): function(): Path
+	local index = 0
+	return function(): Path
+		index = index + 1
+		if index > max then return end
+		local result <total>: Path = { is_absolute = p.is_absolute, root = p.root }
+		for i = 1, index do
+			result[i] = p[i]
+		end
+		return setmetatable(result, path_metatable)
+	end
+end
+
+--- Iterate over the leading directories in a path, excluding the path itself
+---
+--- e.g.
+---    `lexical_path.from_unix "foo/bar/baz/qux":ancestors()` will yield:
+---    "foo"
+---    "foo/bar"
+---    "foo/bar/baz"
+---
+--- See also `Path:lineage()`
+function Path:ancestors(): function(): Path
+	return path_iterator(self, #self - 1)
+end
+
+--- Iterate over the leading directories in a path, including the path itself
+---
+--- e.g.
+---    `lexical_path.from_unix "foo/bar/baz/qux":lineage()` will yield:
+---    "foo"
+---    "foo/bar"
+---    "foo/bar/baz"
+---    "foo/bar/baz/qux"
+---
+--- See also `Path:ancestors()`
+function Path:lineage(): function(): Path
+	return path_iterator(self, #self)
+end
+
 --- Shell style glob patterns
 ---
 --- For patterns:
