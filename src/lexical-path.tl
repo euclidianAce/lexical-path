@@ -343,17 +343,6 @@ function Path:lineage(): function(): Path
 	return path_iterator(self, #self)
 end
 
---- Shell style glob patterns
----
---- For patterns:
----    - `/` is always the path separator
----    - a pattern starting with `/` is an absolute path
----    - `*` represents any number of non-path-separator characters (i.e. matches within a component)
----    - `**` on its own represents any number of path components
----    - Same assumptions about paths as stated at the top of this module
----
---- Returns the components of the pattern (normalized) as patterns for
---- string.match, and whether the matching path should be absolute
 local function parse_pattern(source: string): {string}, boolean
 	local components <const>: {string} = {}
 	for chunk in source:gmatch "[^/]+" do
@@ -427,6 +416,17 @@ local function match(path_components: {string}, pattern_components: {string}): b
 	return completed_match()
 end
 
+--- Check if a path matches against a shell style glob pattern
+---
+--- For patterns:
+---    - `/` is always the path separator
+---    - a pattern starting with `/` is an absolute path
+---    - `*` represents any number of non-path-separator characters (i.e. matches within a component)
+---    - `**` on its own represents any number of path components
+---    - Same assumptions about paths as stated at the top of this module
+---
+--- Returns the components of the pattern (normalized) as patterns for
+--- string.match, and whether the matching path should be absolute
 function Path:match(pattern_src: string): boolean
 	local pattern <const>, absolute <const> = parse_pattern(pattern_src)
 	if self.is_absolute ~= absolute then
