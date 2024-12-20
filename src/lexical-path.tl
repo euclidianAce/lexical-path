@@ -454,4 +454,49 @@ function Path:match(pattern_src: string): boolean
 	return match(self, pattern)
 end
 
+--- Get the extension of a path
+---
+--- Essentially takes the last component and splits it on the last '.' character
+---
+--- The `up_to_ndots` parameter defaults to 1 and determines the maximum number
+--- of '.' characters allowed in the extension.
+---
+--- Returns the extension and how many '.' characters were matched
+---
+--- Examples:
+---
+---    from_os "foo.d.tl":extension() -> "tl", 0
+---    from_os "foo.d.tl":extension(1) -> "tl"
+---    from_os "foo.d.tl":extension(2) -> "d.tl"
+---    from_os "foo.d.tl":extension(3) -> "d.tl"
+---
+---    from_os "a.":extension() -> nil, 0
+---
+--- See also `Path:extension_split`
+function Path:extension(up_to_ndots?: integer): string, integer
+	up_to_ndots = math.max(up_to_ndots or 1, 1)
+	local last <const> = self[#self]
+	if not last then return end
+	for n = up_to_ndots, 1, -1 do
+		local patt <const> = "^.-(" .. ("%.[^%.]+"):rep(n) .. ")$"
+		local ext <const> = last:match(patt)
+		if ext then
+			return ext:sub(2, -1), n
+		end
+	end
+	return nil, 0
+end
+
+--- Get the extension of a path and a copy of the path with the extension stripped
+---
+--- See `Path:extension` for details
+function Path:extension_split(up_to_ndots?: integer): Path, string, integer
+	local ext <const>, count <const> = self:extension(up_to_ndots)
+	if not ext then return nil, nil, 0 end
+
+	local result <const> = self:copy()
+	result[#result] = result[#result]:sub(1, -2 - #ext)
+	return result, ext, count
+end
+
 return lexical_path
