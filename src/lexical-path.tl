@@ -77,7 +77,14 @@ local lexical_path <const> = {
 	RelativeToError = RelativeToError,
 }
 
-local function component_builder(target?: {string}): {string}, function(string)
+--- Returns an array and a function that will modify the returned array
+---
+--- If `target` is provided, it is returned and the returned function will modify it
+---
+--- The returned function will attempt to normalize components as it is given them.
+---  - When it is given "." or "", it ignores it
+---  - When it is given ".." and the array is non-empty, it removes the last component (otherwise it appends "..")
+function lexical_path.component_builder(target?: {string}): {string}, function(component: string)
 	local components <const> = target or {}
 	return components, function(component: string)
 		if component == ".." then
@@ -92,8 +99,8 @@ local function component_builder(target?: {string}): {string}, function(string)
 	end
 end
 
-local function parse_components(source: string, component_pattern: string): {string}
-	local new <const>, add <const> = component_builder()
+local function parse_components(dest: {string}, source: string, component_pattern: string): {string}
+	local new <const>, add <const> = lexical_path.component_builder(dest)
 	for chunk in source:gmatch(component_pattern) do
 		add(chunk)
 	end
@@ -105,7 +112,7 @@ end
 --- The given components array will be copied and normalized
 function lexical_path.from_components(components: {string}, root?: string, is_absolute?: boolean): Path
 	local result <total>: Path = { root = root, is_absolute = is_absolute }
-	local _, add <const> = component_builder(result)
+	local _, add <const> = lexical_path.component_builder(result)
 	for _, v in ipairs(components) do
 		add(v)
 	end
@@ -153,9 +160,16 @@ end
 --- See
 --- https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
 --- for more information on windows file path formats
+--
+-- TODO: NT literal paths? prefixed with \??\
 function lexical_path.from_windows(source: string): Path
 	local root <const>, is_absolute <const>, rest <const> = lexical_path.chop_windows_root(source)
-	return lexical_path.from_components(parse_components(rest, "[^/\\]+"), root, is_absolute)
+	local result <total>: Path = {
+		root = root,
+		is_absolute = is_absolute,
+	}
+	parse_components(result, rest, "[^/\\]+")
+	return setmetatable(result, path_metatable)
 end
 
 --- Parse a string as a Unix path
@@ -164,7 +178,12 @@ end
 --- Possible Roots:
 ---   - nil
 function lexical_path.from_unix(source: string): Path
-	return lexical_path.from_components(parse_components(source, "[^/]+"), nil, source:sub(1, 1) == "/")
+	local result <total>: Path = {
+		root = nil,
+		is_absolute = source:sub(1, 1) == "/"
+	}
+	parse_components(result, source, "[^/]+")
+	return setmetatable(result, path_metatable)
 end
 
 --- Parse a string as a path for the current OS
@@ -196,7 +215,7 @@ end
 ---    "foo/./bar/../baz" would be normalized to "foo/baz"
 function Path:normalized(): Path
 	local new <total>: Path = { root = self.root, is_absolute = self.is_absolute }
-	local _, add <const> = component_builder(new)
+	local _, add <const> = lexical_path.component_builder(new)
 	for _, chunk in ipairs(self) do
 		add(chunk)
 	end
