@@ -72,15 +72,15 @@ local path_metatable <const>: metatable<Path> = {
 	__tostring: function(Path): string = nil,
 }
 
-local enum RelativeToError
+local enum ComparisonError
 	"Differing roots"
 	"Mixing of absolute and non-absolute path"
 end
 
 local lexical_path <const> = {
 	Path = Path,
-	RelativeToError = RelativeToError,
 	Pattern = Pattern,
+	ComparisonError = ComparisonError,
 }
 
 --- Returns an array and a function that will modify the returned array
@@ -285,22 +285,29 @@ path_metatable.__concat = function(a: Path | string, b: Path | string): Path
 	return setmetatable(result, path_metatable)
 end
 
---- Will return nil when paths have different non-nil roots or they are not the
---- same absolute-ness
-function Path:relative_to(other: Path): Path, RelativeToError
-	local root = self.root
-	if self.root ~= other.root then
-		if not self.root then
-			root = other.root
-		elseif not other.root then
-			root = self.root
+--- Note, returned root may be nil
+--- check if the error is non nil
+local function root_for_comparison(a: Path, b: Path): string, ComparisonError
+	if a.root ~= b.root then
+		if not a.root then
+			return b.root
+		elseif not b.root then
+			return a.root
 		else
 			return nil, "Differing roots"
 		end
 	end
-	if self.is_absolute ~= other.is_absolute then
+	if a.is_absolute ~= b.is_absolute then
 		return nil, "Mixing of absolute and non-absolute path"
 	end
+	return a.root
+end
+
+--- Will return nil when paths have different non-nil roots or they are not the
+--- same absolute-ness
+function Path:relative_to(other: Path): Path, ComparisonError
+	local root <const>, err <const> = root_for_comparison(self, other)
+	if err then return nil, err end
 
 	local a_len <const> = #self
 	local b_len <const> = #other
@@ -326,6 +333,25 @@ function Path:relative_to(other: Path): Path, RelativeToError
 		table.insert(ret, self[i])
 	end
 	return setmetatable(ret, path_metatable)
+end
+
+--- Returns whether the path (`self`) is contained within the given path (`maybe_container`)
+---
+--- Note that a path is not considered to containe itself
+function Path:is_in(maybe_container: Path): boolean, ComparisonError
+	local _, err <const> = root_for_comparison(self, maybe_container)
+	if err then return nil, err end
+
+	if #maybe_container == 0 then return true end
+	if #self <= #maybe_container then return false end
+
+	for i = 1, #maybe_container do
+		if self[i] ~= maybe_container[i] then
+			return false
+		end
+	end
+
+	return true
 end
 
 local function path_iterator(p: Path, max: integer): function(): Path
