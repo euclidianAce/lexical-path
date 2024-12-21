@@ -61,6 +61,11 @@ local record Path
 	metamethod __eq: function(Path, Path): boolean
 end
 
+local record Pattern
+	{string}
+	is_absolute: boolean
+end
+
 local path_metatable <const>: metatable<Path> = {
 	__index = Path,
 	__name = "lexical-path.Path",
@@ -75,6 +80,7 @@ end
 local lexical_path <const> = {
 	Path = Path,
 	RelativeToError = RelativeToError,
+	Pattern = Pattern,
 }
 
 --- Returns an array and a function that will modify the returned array
@@ -362,8 +368,21 @@ function Path:lineage(): function(): Path
 	return path_iterator(self, #self)
 end
 
-local function parse_pattern(source: string): {string}, boolean
-	local components <const>: {string} = {}
+--- Check if a path matches against a shell style glob pattern
+---
+--- For patterns:
+---    - `/` is always the path separator
+---    - a pattern starting with `/` is an absolute path
+---    - `*` represents any number of non-path-separator characters (i.e. matches within a component)
+---    - `**` on its own represents any number of path components
+---    - Same assumptions about paths as stated at the top of this module
+---
+--- Returns the components of the pattern (normalized) as patterns for
+--- string.match, and whether the matching path should be absolute
+function lexical_path.parse_pattern(source: string): Pattern
+	local components <total>: Pattern = {
+		is_absolute = (source:sub(1, 1) == "/")
+	}
 	for chunk in source:gmatch "[^/]+" do
 		if chunk == ".." then
 			if #components > 0 and components[#components] ~= ".." then
@@ -389,12 +408,12 @@ local function parse_pattern(source: string): {string}, boolean
 			table.insert(components, escaped)
 		end
 	end
-	return components, source:sub(1, 1) == "/"
+	return components
 end
 
-local function match(path_components: {string}, pattern_components: {string}): boolean
+local function match(path_components: {string}, pattern: Pattern): boolean
 	local path_length <const> = #path_components
-	local pattern_length <const> = #pattern_components
+	local pattern_length <const> = #pattern
 
 	local pattern_index = 1
 	local path_index = 1
@@ -417,7 +436,7 @@ local function match(path_components: {string}, pattern_components: {string}): b
 
 	repeat
 		while pattern_index <= pattern_length and path_index <= path_length do
-			local pattern_component <const> = pattern_components[pattern_index]
+			local pattern_component <const> = pattern[pattern_index]
 			local path_component <const> = path_components[path_index]
 
 			if pattern_component == "**" then
@@ -435,20 +454,14 @@ local function match(path_components: {string}, pattern_components: {string}): b
 	return completed_match()
 end
 
---- Check if a path matches against a shell style glob pattern
----
---- For patterns:
----    - `/` is always the path separator
----    - a pattern starting with `/` is an absolute path
----    - `*` represents any number of non-path-separator characters (i.e. matches within a component)
----    - `**` on its own represents any number of path components
----    - Same assumptions about paths as stated at the top of this module
----
---- Returns the components of the pattern (normalized) as patterns for
---- string.match, and whether the matching path should be absolute
-function Path:match(pattern_src: string): boolean
-	local pattern <const>, absolute <const> = parse_pattern(pattern_src)
-	if self.is_absolute ~= absolute then
+local function ensure_pattern(pattern_src: string | Pattern): Pattern
+	if pattern_src is Pattern then return pattern_src end
+	return lexical_path.parse_pattern(pattern_src)
+end
+
+function Path:match(pattern_src: string | Pattern): boolean
+	local pattern <const> = ensure_pattern(pattern_src)
+	if self.is_absolute ~= pattern.is_absolute then
 		return false
 	end
 	return match(self, pattern)
