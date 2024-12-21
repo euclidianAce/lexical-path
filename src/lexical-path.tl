@@ -200,6 +200,7 @@ function lexical_path.from_os(source: string): Path
 	return lexical_path.from_unix(source)
 end
 
+--- Render a path to a string using the given path separator or defaulting to the native one
 function Path:to_string(separator?: string): string
 	separator = separator or package.config:sub(1, 1)
 	local result <const> = (self.root or "")
@@ -209,6 +210,7 @@ end
 
 path_metatable.__tostring = Path.to_string
 
+--- Create a copy of a path
 function Path:copy(): Path
 	local result <total>: Path = { root = self.root, is_absolute = self.is_absolute }
 	for i, v in ipairs(self) do result[i] = v end
