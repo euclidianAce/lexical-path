@@ -61,6 +61,11 @@ local Path = {}
 
 
 
+local Pattern = {}
+
+
+
+
 local path_metatable = {
    __index = Path,
    __name = "lexical-path.Path",
@@ -74,10 +79,18 @@ local path_metatable = {
 
 local lexical_path = {
    Path = Path,
-   RelativeToError = RelativeToError,
+   Pattern = Pattern,
+   ComparisonError = ComparisonError,
 }
 
-local function component_builder(target)
+
+
+
+
+
+
+
+function lexical_path.component_builder(target)
    local components = target or {}
    return components, function(component)
       if component == ".." then
@@ -92,8 +105,8 @@ local function component_builder(target)
    end
 end
 
-local function parse_components(source, component_pattern)
-   local new, add = component_builder()
+local function parse_components(dest, source, component_pattern)
+   local new, add = lexical_path.component_builder(dest)
    for chunk in source:gmatch(component_pattern) do
       add(chunk)
    end
@@ -105,7 +118,7 @@ end
 
 function lexical_path.from_components(components, root, is_absolute)
    local result = { root = root, is_absolute = is_absolute }
-   local _, add = component_builder(result)
+   local _, add = lexical_path.component_builder(result)
    for _, v in ipairs(components) do
       add(v)
    end
@@ -153,9 +166,16 @@ end
 
 
 
+
+
 function lexical_path.from_windows(source)
    local root, is_absolute, rest = lexical_path.chop_windows_root(source)
-   return lexical_path.from_components(parse_components(rest, "[^/\\]+"), root, is_absolute)
+   local result = {
+      root = root,
+      is_absolute = is_absolute,
+   }
+   parse_components(result, rest, "[^/\\]+")
+   return setmetatable(result, path_metatable)
 end
 
 
@@ -164,7 +184,12 @@ end
 
 
 function lexical_path.from_unix(source)
-   return lexical_path.from_components(parse_components(source, "[^/]+"), nil, source:sub(1, 1) == "/")
+   local result = {
+      root = nil,
+      is_absolute = source:sub(1, 1) == "/",
+   }
+   parse_components(result, source, "[^/]+")
+   return setmetatable(result, path_metatable)
 end
 
 
@@ -175,14 +200,16 @@ function lexical_path.from_os(source)
    return lexical_path.from_unix(source)
 end
 
+
 function Path:to_string(separator)
    separator = separator or package.config:sub(1, 1)
-   return (self.root or "") ..
-   (self.is_absolute and separator or "") ..
-   (#self == 0 and "." or table.concat(self, separator))
+   local result = (self.root or "") ..
+   (self.is_absolute and separator or "")
+   return result .. (#result == 0 and #self == 0 and "." or table.concat(self, separator))
 end
 
 path_metatable.__tostring = Path.to_string
+
 
 function Path:copy()
    local result = { root = self.root, is_absolute = self.is_absolute }
@@ -196,7 +223,7 @@ end
 
 function Path:normalized()
    local new = { root = self.root, is_absolute = self.is_absolute }
-   local _, add = component_builder(new)
+   local _, add = lexical_path.component_builder(new)
    for _, chunk in ipairs(self) do
       add(chunk)
    end
@@ -262,20 +289,27 @@ end
 
 
 
-function Path:relative_to(other)
-   local root = self.root
-   if self.root ~= other.root then
-      if not self.root then
-         root = other.root
-      elseif not other.root then
-         root = self.root
+local function root_for_comparison(a, b)
+   if a.root ~= b.root then
+      if not a.root then
+         return b.root
+      elseif not b.root then
+         return a.root
       else
          return nil, "Differing roots"
       end
    end
-   if self.is_absolute ~= other.is_absolute then
+   if a.is_absolute ~= b.is_absolute then
       return nil, "Mixing of absolute and non-absolute path"
    end
+   return a.root
+end
+
+
+
+function Path:relative_to(other)
+   local root, err = root_for_comparison(self, other)
+   if err then return nil, err end
 
    local a_len = #self
    local b_len = #other
@@ -306,6 +340,34 @@ end
 
 
 
+function Path:is_in(maybe_container)
+   local _, err = root_for_comparison(self, maybe_container)
+   if err then return nil, err end
+
+   if #maybe_container == 0 then return true end
+   if #self <= #maybe_container then return false end
+
+   for i = 1, #maybe_container do
+      if self[i] ~= maybe_container[i] then
+         return false
+      end
+   end
+
+   return true
+end
+
+local function path_iterator(p, max)
+   local index = 0
+   return function()
+      index = index + 1
+      if index > max then return end
+      local result = { is_absolute = p.is_absolute, root = p.root }
+      for i = 1, index do
+         result[i] = p[i]
+      end
+      return setmetatable(result, path_metatable)
+   end
+end
 
 
 
@@ -314,8 +376,41 @@ end
 
 
 
-local function parse_pattern(source)
-   local components = {}
+
+
+function Path:ancestors()
+   return path_iterator(self, #self - 1)
+end
+
+
+
+
+
+
+
+
+
+
+
+function Path:lineage()
+   return path_iterator(self, #self)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function lexical_path.parse_pattern(source)
+   local components = {
+      is_absolute = (source:sub(1, 1) == "/"),
+   }
    for chunk in source:gmatch("[^/]+") do
       if chunk == ".." then
          if #components > 0 and components[#components] ~= ".." then
@@ -338,15 +433,15 @@ local function parse_pattern(source)
          end)
 
 
-         table.insert(components, escaped)
+         table.insert(components, "^" .. escaped .. "$")
       end
    end
-   return components, source:sub(1, 1) == "/"
+   return components
 end
 
-local function match(path_components, pattern_components)
+local function match(path_components, pattern)
    local path_length = #path_components
-   local pattern_length = #pattern_components
+   local pattern_length = #pattern
 
    local pattern_index = 1
    local path_index = 1
@@ -369,7 +464,7 @@ local function match(path_components, pattern_components)
 
    repeat
       while pattern_index <= pattern_length and path_index <= path_length do
-         local pattern_component = pattern_components[pattern_index]
+         local pattern_component = pattern[pattern_index]
          local path_component = path_components[path_index]
 
          if pattern_component == "**" then
@@ -387,12 +482,62 @@ local function match(path_components, pattern_components)
    return completed_match()
 end
 
+local function ensure_pattern(pattern_src)
+   if type(pattern_src) == "table" then return pattern_src end
+   return lexical_path.parse_pattern(pattern_src)
+end
+
 function Path:match(pattern_src)
-   local pattern, absolute = parse_pattern(pattern_src)
-   if self.is_absolute ~= absolute then
+   local pattern = ensure_pattern(pattern_src)
+   if self.is_absolute ~= pattern.is_absolute then
       return false
    end
    return match(self, pattern)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function Path:extension(up_to_ndots)
+   up_to_ndots = math.max(up_to_ndots or 1, 1)
+   local last = self[#self]
+   if not last then return end
+   for n = up_to_ndots, 1, -1 do
+      local patt = "^.-(" .. ("%.[^%.]+"):rep(n) .. ")$"
+      local ext = last:match(patt)
+      if ext then
+         return ext:sub(2, -1), n
+      end
+   end
+   return nil, 0
+end
+
+
+
+
+function Path:extension_split(up_to_ndots)
+   local ext, count = self:extension(up_to_ndots)
+   if not ext then return nil, nil, 0 end
+
+   local result = self:copy()
+   result[#result] = result[#result]:sub(1, -2 - #ext)
+   return result, ext, count
 end
 
 return lexical_path

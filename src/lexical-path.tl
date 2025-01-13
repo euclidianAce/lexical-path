@@ -339,7 +339,7 @@ end
 
 --- Returns whether the path (`self`) is contained within the given path (`maybe_container`)
 ---
---- Note that a path is not considered to containe itself
+--- Note that a path is not considered to contain itself
 function Path:is_in(maybe_container: Path): boolean, ComparisonError
 	local _, err <const> = root_for_comparison(self, maybe_container)
 	if err then return nil, err end
@@ -433,7 +433,7 @@ function lexical_path.parse_pattern(source: string): Pattern
 				end
 			)
 
-			table.insert(components, escaped)
+			table.insert(components, "^" .. escaped .. "$")
 		end
 	end
 	return components
