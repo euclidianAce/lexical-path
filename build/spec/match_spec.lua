@@ -1,4 +1,4 @@
-local _ = require("busted")
+
 local lexical_path = require("lexical-path")
 local unix = lexical_path.from_unix
 local luassert = require("luassert")

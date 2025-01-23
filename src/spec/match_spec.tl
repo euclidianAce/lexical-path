@@ -1,4 +1,4 @@
-local _ = require("busted")
+local type _ = require("busted")
 local lexical_path <const> = require "lexical-path"
 local unix <const> = lexical_path.from_unix
 local luassert <const> = require("luassert")

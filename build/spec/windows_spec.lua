@@ -33,10 +33,8 @@ Parsed  : %q (%s)
 Expected: %q (%s)
 ]]
 
+
 local inspect = require("inspect")
-
-
-
 
 describe("Windows paths", function()
    for _, case in ipairs(cases) do

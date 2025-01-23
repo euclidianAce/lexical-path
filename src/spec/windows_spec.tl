@@ -33,10 +33,8 @@ Parsed  : %q (%s)
 Expected: %q (%s)
 ]]
 
+local type _ = require("busted")
 local inspect <const> = require "inspect" as function(any)
-
-global describe: function(string, function)
-global it: function(string, function)
 
 describe("Windows paths", function()
 	for _, case in ipairs(cases) do
