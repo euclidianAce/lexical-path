@@ -439,6 +439,28 @@ function lexical_path.parse_pattern(source: string): Pattern
 	return components
 end
 
+function Path:remove_leading(leading: Path): Path, ComparisonError
+	if leading.is_absolute ~= self.is_absolute then
+		return nil, "Mixing of absolute and non-absolute path"
+	end
+	local result <const> = self:copy()
+	result.is_absolute = false
+	local index = 1
+	for _, chunk in ipairs(leading) do
+		if result[index] ~= chunk then
+			break
+		end
+		index = index + 1
+	end
+	if index < #leading then
+		return result
+	end
+	for _ = 1, index - 1 do
+		table.remove(result, 1)
+	end
+	return result
+end
+
 local function match(path_components: {string}, pattern: Pattern): boolean
 	local path_length <const> = #path_components
 	local pattern_length <const> = #pattern
