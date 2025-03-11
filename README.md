@@ -8,6 +8,8 @@ paths, but just the names/spelling of those paths. The most relevant part of
 this is that symlinks are not followed as that would require querying the
 actual underlying filesystem.
 
+Note: `realpath` denotes these types of paths as `--logical` as it resolves `..` before symlinks.
+
 # Definitions
 
 A `path` is an array of `component`s, which are just strings. When a
@@ -45,7 +47,11 @@ Two functions are provided to parse paths:
 
  - `from_unix`: uses `/` as a path separator, doesn't produce rooted paths
  - `from_windows`: uses both `/` and `\` as path separators, may produce rooted paths for drive letters, UNC paths, etc.
- - `from_components`: If you need to roll your own parser, this takes an array of strings to serve as the components, an optional root, and a boolean for if the path is absolute. Note that this function will normalize the resulting path according to the assumptions about `..`, `.`, empty components, etc.
 
 Additionally, a `from_os` function is provided which detects whether the unix or windows parser should be used from `package.config`
 
+`from_components` is provided if you need to roll your own parser. This takes
+an array of strings to serve as the components, an optional root, and a boolean
+for if the path is absolute. Note that this function will normalize the
+resulting path according to the assumptions about `..`, `.`, empty components,
+etc.
