@@ -77,11 +77,18 @@ local path_metatable = {
 
 
 
+
+
+
+
+
 local lexical_path = {
    Path = Path,
    Pattern = Pattern,
    ComparisonError = ComparisonError,
+   Normalization = Normalization,
 }
+
 
 
 
@@ -96,22 +103,33 @@ function lexical_path.component_builder(target)
       if component == ".." then
          if #components > 0 and components[#components] ~= ".." then
             table.remove(components)
-         else
-            table.insert(components, component)
+            return "non-normal"
          end
-      elseif component ~= "." and component ~= "" then
          table.insert(components, component)
+         return "normal"
       end
+      if component ~= "." and component ~= "" then
+         table.insert(components, component)
+         return "normal"
+      end
+      return "non-normal"
    end
 end
 
 local function parse_components(dest, source, component_pattern)
    local new, add = lexical_path.component_builder(dest)
+   local normal = "normal"
    for chunk in source:gmatch(component_pattern) do
-      add(chunk)
+      if add(chunk) == "non-normal" then
+         normal = "non-normal"
+      end
    end
-   return new
+   return new, normal
 end
+
+
+
+
 
 
 
@@ -119,10 +137,15 @@ end
 function lexical_path.from_components(components, root, is_absolute)
    local result = { root = root, is_absolute = is_absolute }
    local _, add = lexical_path.component_builder(result)
-   for _, v in ipairs(components) do
-      add(v)
+   local non_normal_index = nil
+   local normal = "normal"
+   for i, v in ipairs(components) do
+      if add(v) == "non-normal" and not non_normal_index then
+         normal = "non-normal"
+         non_normal_index = i
+      end
    end
-   return setmetatable(result, path_metatable)
+   return setmetatable(result, path_metatable), normal, non_normal_index
 end
 
 
@@ -131,6 +154,11 @@ end
 function lexical_path.chop_windows_root(source)
    local root
    local is_absolute = false
+
+
+
+
+
    if source:sub(1, 3):match("^[A-Za-z]:\\") then
       root = source:sub(1, 2):upper()
       source = source:sub(4, -1)
@@ -168,15 +196,19 @@ end
 
 
 
+
+
 function lexical_path.from_windows(source)
    local root, is_absolute, rest = lexical_path.chop_windows_root(source)
    local result = {
       root = root,
       is_absolute = is_absolute,
    }
-   parse_components(result, rest, "[^/\\]+")
-   return setmetatable(result, path_metatable)
+   local _, norm = parse_components(result, rest, "[^/\\]+")
+   return setmetatable(result, path_metatable), norm
 end
+
+
 
 
 
@@ -188,8 +220,8 @@ function lexical_path.from_unix(source)
       root = nil,
       is_absolute = source:sub(1, 1) == "/",
    }
-   parse_components(result, source, "[^/]+")
-   return setmetatable(result, path_metatable)
+   local _, norm = parse_components(result, source, "[^/]+")
+   return setmetatable(result, path_metatable), norm
 end
 
 
@@ -228,6 +260,23 @@ function Path:normalized()
       add(chunk)
    end
    return setmetatable(new, path_metatable)
+end
+
+local non_normal_components = {
+   [".."] = true,
+   ["."] = true,
+   [""] = true,
+}
+
+
+
+function Path:is_normalized()
+   for i, component in ipairs(self) do
+      if non_normal_components[component] then
+         return false, i
+      end
+   end
+   return true
 end
 
 path_metatable.__eq = function(a, b)

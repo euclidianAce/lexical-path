@@ -77,10 +77,16 @@ local enum ComparisonError
 	"Mixing of absolute and non-absolute path"
 end
 
+local enum Normalization
+	"normal"
+	"non-normal"
+end
+
 local lexical_path <const> = {
 	Path = Path,
 	Pattern = Pattern,
 	ComparisonError = ComparisonError,
+	Normalization = Normalization,
 }
 
 --- Returns an array and a function that will modify the returned array
@@ -88,41 +94,58 @@ local lexical_path <const> = {
 --- If `target` is provided, it is returned and the returned function will modify it
 ---
 --- The returned function will attempt to normalize components as it is given them.
----  - When it is given "." or "", it ignores it
----  - When it is given ".." and the array is non-empty, it removes the last component (otherwise it appends "..")
-function lexical_path.component_builder(target?: {string}): {string}, function(component: string)
+---  - When it is given "." or "", it ignores it and returns "non-normal"
+---  - When it is given ".." and the array is non-empty, it removes the last component and returns "non-normal", (otherwise it appends ".." and returns "normal")
+---  - otherwise it appends the component and return strue
+function lexical_path.component_builder(target?: {string}): {string}, function(component: string): Normalization
 	local components <const> = target or {}
-	return components, function(component: string)
+	return components, function(component: string): Normalization
 		if component == ".." then
 			if #components > 0 and components[#components] ~= ".." then
 				table.remove(components)
-			else
-				table.insert(components, component)
+				return "non-normal"
 			end
-		elseif component ~= "." and component ~= "" then
 			table.insert(components, component)
+			return "normal"
 		end
+		if component ~= "." and component ~= "" then
+			table.insert(components, component)
+			return "normal"
+		end
+		return "non-normal"
 	end
 end
 
-local function parse_components(dest: {string}, source: string, component_pattern: string): {string}
+local function parse_components(dest: {string}, source: string, component_pattern: string): {string}, Normalization
 	local new <const>, add <const> = lexical_path.component_builder(dest)
+	local normal: Normalization = "normal"
 	for chunk in source:gmatch(component_pattern) do
-		add(chunk)
+		if add(chunk) == "non-normal" then
+			normal = "non-normal"
+		end
 	end
-	return new
+	return new, normal
 end
 
 --- Bring your own parser
 ---
 --- The given components array will be copied and normalized
-function lexical_path.from_components(components: {string}, root?: string, is_absolute?: boolean): Path
+---
+--- Returns the constructed path, whether the given components we already
+--- normalized, and if they weren't, the index of the first non-normal
+--- component
+function lexical_path.from_components(components: {string}, root?: string, is_absolute?: boolean): Path, Normalization, integer
 	local result <total>: Path = { root = root, is_absolute = is_absolute }
 	local _, add <const> = lexical_path.component_builder(result)
-	for _, v in ipairs(components) do
-		add(v)
+	local non_normal_index: integer = nil
+	local normal: Normalization = "normal"
+	for i, v in ipairs(components) do
+		if add(v) == "non-normal" and not non_normal_index then
+			normal = "non-normal"
+			non_normal_index = i
+		end
 	end
-	return setmetatable(result, path_metatable)
+	return setmetatable(result, path_metatable), normal, non_normal_index
 end
 
 --- What `from_windows` uses to determine the root
@@ -131,6 +154,11 @@ end
 function lexical_path.chop_windows_root(source: string): string, boolean, string
 	local root: string
 	local is_absolute = false
+
+	--if source:sub(1, 4) == [[\??\]] then
+	--	source = source:sub(5, -1)
+	--end
+
 	if source:sub(1, 3):match("^[A-Za-z]:\\") then
 		root = source:sub(1, 2):upper()
 		source = source:sub(4, -1)
@@ -158,7 +186,7 @@ end
 --- Component Separator: "\\" or "/"
 --- Possible Roots:
 ---   - nil
----   - A drive letter followed by a colon (Note: Drive letters will be normalized to upper case)
+---   - A drive letter followed by a colon (Note: Drive letters will be converted to upper case. This doesn't count as normalization)
 ---   - \, representing a UNC path, always absolute
 ---   - \\?, representing an absolute DOS device path (without normalization), always absolute
 ---   - \\., representing an absolute DOS device path, always absolute
@@ -166,16 +194,18 @@ end
 --- See
 --- https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
 --- for more information on windows file path formats
+---
+--- Returns the path and whether or not it was already normalized
 --
 -- TODO: NT literal paths? prefixed with \??\
-function lexical_path.from_windows(source: string): Path
+function lexical_path.from_windows(source: string): Path, Normalization
 	local root <const>, is_absolute <const>, rest <const> = lexical_path.chop_windows_root(source)
 	local result <total>: Path = {
 		root = root,
 		is_absolute = is_absolute,
 	}
-	parse_components(result, rest, "[^/\\]+")
-	return setmetatable(result, path_metatable)
+	local _, norm <const> = parse_components(result, rest, "[^/\\]+")
+	return setmetatable(result, path_metatable), norm
 end
 
 --- Parse a string as a Unix path
@@ -183,17 +213,19 @@ end
 --- Component Separator: "/"
 --- Possible Roots:
 ---   - nil
-function lexical_path.from_unix(source: string): Path
+---
+--- Returns the path and whether or not it was already normalized
+function lexical_path.from_unix(source: string): Path, Normalization
 	local result <total>: Path = {
 		root = nil,
 		is_absolute = source:sub(1, 1) == "/"
 	}
-	parse_components(result, source, "[^/]+")
-	return setmetatable(result, path_metatable)
+	local _, norm <const> = parse_components(result, source, "[^/]+")
+	return setmetatable(result, path_metatable), norm
 end
 
 --- Parse a string as a path for the current OS
-function lexical_path.from_os(source: string): Path
+function lexical_path.from_os(source: string): Path, Normalization
 	if package.config:sub(1, 1) == "\\" then
 		return lexical_path.from_windows(source)
 	end
@@ -228,6 +260,23 @@ function Path:normalized(): Path
 		add(chunk)
 	end
 	return setmetatable(new, path_metatable)
+end
+
+local non_normal_components <const>: {string:boolean} = {
+	[".."] = true,
+	["."] = true,
+	[""] = true,
+}
+
+--- if the path is considered normalized, returns true
+--- otherwise returns false and the index of the first component that is non-normal
+function Path:is_normalized(): boolean, integer
+	for i, component in ipairs(self) do
+		if non_normal_components[component] then
+			return false, i
+		end
+	end
+	return true
 end
 
 path_metatable.__eq = function(a: Path, b: Path): boolean
@@ -528,10 +577,10 @@ end
 ---
 --- Examples:
 ---
----    from_os "foo.d.tl":extension() -> "tl", 0
----    from_os "foo.d.tl":extension(1) -> "tl"
----    from_os "foo.d.tl":extension(2) -> "d.tl"
----    from_os "foo.d.tl":extension(3) -> "d.tl"
+---    from_os "foo.d.tl":extension() -> "tl", 1
+---    from_os "foo.d.tl":extension(1) -> "tl", 1
+---    from_os "foo.d.tl":extension(2) -> "d.tl", 2
+---    from_os "foo.d.tl":extension(3) -> "d.tl", 2
 ---
 ---    from_os "a.":extension() -> nil, 0
 ---
