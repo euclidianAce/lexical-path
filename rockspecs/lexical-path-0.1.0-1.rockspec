@@ -1,8 +1,9 @@
 rockspec_format = "3.0"
 package = "lexical-path"
-version = "dev-1"
+version = "0.1.0-1"
 source = {
 	url = "git://github.com/euclidianAce/lexical-path",
+	tag = "v0.1.0",
 }
 description = {
 	summary = "Lexical/logical path management",
