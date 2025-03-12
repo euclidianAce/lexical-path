@@ -49,5 +49,17 @@ describe("Windows paths", function()
 				inspect(expected)
 			))
 		end)
+
+		it("should handle “\\??\\" .. case[1] .. "”", function()
+			local parsed <const> = lexical_path.from_windows(case[1])
+			local expected <const> = case[2]
+			assert(parsed == expected, case_output:format(
+				case[1],
+				parsed:to_string "\\",
+				inspect(parsed),
+				expected:to_string "\\",
+				inspect(expected)
+			))
+		end)
 	end
 end)

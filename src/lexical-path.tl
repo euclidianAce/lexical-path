@@ -151,13 +151,28 @@ end
 --- What `from_windows` uses to determine the root
 ---
 --- Returns the root, whether the path is absolute, and the rest of the path
+---
+--- The root is determined by taking the following steps:
+---  - if the path starts with `\??\`, it is removed
+---  - if the path then starts with a letter followed by a volume separator (aka a
+---    colon) `[a-zA-Z]:`, it is rooted to that drive letter, and the drive
+---    letter and separator are removed.
+---    Then if the path immediately starts with a `\`, it is considered absolute and the `\` is removed
+---    otherwise it is relative (but still rooted)
+---    Additionally, drive letters are parsed as either upper or lower case, but upper case is always returned as the root by this function
+---  - otherwise if the path then starts with a `\\.\` or `\\?\` the first 4
+---    characters are removed, the path is aboslute, and rooted to `\\.` or `\\?`
+---    repectively
+---  - otherwise if the path then starts with `\\`, it is removed, the path is absolute, and rooted to `\`
+---  - otherwise if the path then starts with `\`, it is removed, the path is absolute, but not rooted
+---  - otherwise the path is relative and not rooted
 function lexical_path.chop_windows_root(source: string): string, boolean, string
 	local root: string
 	local is_absolute = false
 
-	--if source:sub(1, 4) == [[\??\]] then
-	--	source = source:sub(5, -1)
-	--end
+	if source:sub(1, 4) == [[\??\]] then
+		source = source:sub(5, -1)
+	end
 
 	if source:sub(1, 3):match("^[A-Za-z]:\\") then
 		root = source:sub(1, 2):upper()
@@ -191,13 +206,18 @@ end
 ---   - \\?, representing an absolute DOS device path (without normalization), always absolute
 ---   - \\., representing an absolute DOS device path, always absolute
 ---
+--- NT Object path prefixes (i.e. `\??\` are stripped)
+---
+--- UNC paths that contain drive letters followed by `$` are not converted to anything else
+---
+--- e.g. `\\system07\C$\` on windows would resolve to the root directory of `C:` on the host `system07`,
+--- but to this library, this is just an absolute path, rooted at `\`, with components `{ "system07", "C$" }`
+---
 --- See
 --- https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats
 --- for more information on windows file path formats
 ---
 --- Returns the path and whether or not it was already normalized
---
--- TODO: NT literal paths? prefixed with \??\
 function lexical_path.from_windows(source: string): Path, Normalization
 	local root <const>, is_absolute <const>, rest <const> = lexical_path.chop_windows_root(source)
 	local result <total>: Path = {

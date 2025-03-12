@@ -151,13 +151,28 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function lexical_path.chop_windows_root(source)
    local root
    local is_absolute = false
 
-
-
-
+   if source:sub(1, 4) == [[\??\]] then
+      source = source:sub(5, -1)
+   end
 
    if source:sub(1, 3):match("^[A-Za-z]:\\") then
       root = source:sub(1, 2):upper()
@@ -180,6 +195,11 @@ function lexical_path.chop_windows_root(source)
    end
    return root, is_absolute, source
 end
+
+
+
+
+
 
 
 
