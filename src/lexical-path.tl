@@ -290,11 +290,19 @@ local non_normal_components <const>: {string:boolean} = {
 
 --- if the path is considered normalized, returns true
 --- otherwise returns false and the index of the first component that is non-normal
+---
+--- Note: paths with leading '..' are still considered normalized (assuming the
+--- rest of the path is normalized)
 function Path:is_normalized(): boolean, integer
-	for i, component in ipairs(self) do
-		if non_normal_components[component] then
+	local i = 1
+	while i <= #self and self[i] == ".." do
+		i = i + 1
+	end
+	while i <= #self do
+		if non_normal_components[self[i]] then
 			return false, i
 		end
+		i = i + 1
 	end
 	return true
 end

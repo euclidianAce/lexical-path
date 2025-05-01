@@ -290,11 +290,19 @@ local non_normal_components = {
 
 
 
+
+
+
 function Path:is_normalized()
-   for i, component in ipairs(self) do
-      if non_normal_components[component] then
+   local i = 1
+   while i <= #self and self[i] == ".." do
+      i = i + 1
+   end
+   while i <= #self do
+      if non_normal_components[self[i]] then
          return false, i
       end
+      i = i + 1
    end
    return true
 end
