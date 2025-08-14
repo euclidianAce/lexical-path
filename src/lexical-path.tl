@@ -473,7 +473,7 @@ function Path:lineage(): function(): Path
 	return path_iterator(self, #self)
 end
 
---- Check if a path matches against a shell style glob pattern
+--- Parse a shell style glob pattern
 ---
 --- For patterns:
 ---    - `/` is always the path separator
@@ -516,6 +516,14 @@ function lexical_path.parse_pattern(source: string): Pattern
 	return components
 end
 
+--- If the first `#leading` components of `leading` and `self` are the same,
+--- return a new path with the components of `self` without the components of
+--- `leading`
+---
+--- If an absolute and non-absolute path are given, nil and an error are
+--- returned
+---
+--- The returned path (if not nil) is always relative
 function Path:remove_leading(leading: Path): Path, ComparisonError
 	if leading.is_absolute ~= self.is_absolute then
 		return nil, "Mixing of absolute and non-absolute path"
@@ -586,6 +594,7 @@ local function ensure_pattern(pattern_src: string | Pattern): Pattern
 	return lexical_path.parse_pattern(pattern_src)
 end
 
+--- Check if a path matches against a given pattern
 function Path:match(pattern_src: string | Pattern): boolean
 	local pattern <const> = ensure_pattern(pattern_src)
 	if self.is_absolute ~= pattern.is_absolute then

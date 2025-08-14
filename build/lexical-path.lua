@@ -516,6 +516,14 @@ function lexical_path.parse_pattern(source)
    return components
 end
 
+
+
+
+
+
+
+
+
 function Path:remove_leading(leading)
    if leading.is_absolute ~= self.is_absolute then
       return nil, "Mixing of absolute and non-absolute path"
@@ -585,6 +593,7 @@ local function ensure_pattern(pattern_src)
    if type(pattern_src) == "table" then return pattern_src end
    return lexical_path.parse_pattern(pattern_src)
 end
+
 
 function Path:match(pattern_src)
    local pattern = ensure_pattern(pattern_src)
