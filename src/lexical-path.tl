@@ -639,4 +639,14 @@ function Path:extension_split(up_to_ndots?: integer): Path, string, integer
 	return result, ext, count
 end
 
+--- Returns a new path of the directory that contains `self`
+---
+--- If `self` is an empty path, returns nil
+function Path:parent(): Path
+	if #self == 0 then return nil end
+	local result <const> = self:copy()
+	table.remove(result)
+	return result
+end
+
 return lexical_path

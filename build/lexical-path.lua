@@ -639,4 +639,14 @@ function Path:extension_split(up_to_ndots)
    return result, ext, count
 end
 
+
+
+
+function Path:parent()
+   if #self == 0 then return nil end
+   local result = self:copy()
+   table.remove(result)
+   return result
+end
+
 return lexical_path
